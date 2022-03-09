@@ -41,7 +41,7 @@ class MultiSafepayPaymentAcquirer(models.Model):
                 continue
             if icon.currency_ids and currency not in icon.currency_ids:
                 continue
-            if icon.country_ids and partner.country_id not in icon.country_ids:
+            if icon.country_ids and partner.country_id and partner.country_id not in icon.country_ids:
                 continue
             payment_method_list.append(icon)
         return payment_method_list
