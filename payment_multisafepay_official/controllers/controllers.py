@@ -16,8 +16,8 @@ class MultiSafepayController(http.Controller):
         auth='none',
     )
     def notification_payment(self, **post):
-        request.env['payment.transaction'].sudo().form_feedback(post, 'multisafepay')
-        return werkzeug.utils.redirect('/payment/process')
+        request.env['payment.transaction'].sudo()._handle_notification_data('multisafepay', post)
+        return werkzeug.utils.redirect('/payment/status')
 
     @http.route(
         ['/payment/multisafepay/init'],
@@ -27,7 +27,7 @@ class MultiSafepayController(http.Controller):
         csrf=False,
     )
     def init_payment(self, **post):
-        acquirer = request.env['payment.acquirer'].search([('id', '=', post['acquirer'])], limit=1)
+        acquirer = request.env['payment.provider'].sudo().search([('id', '=', post['provider_id'])], limit=1)
 
         try:
             multisafepay_client = acquirer.get_multisafepay_client()
@@ -45,5 +45,16 @@ class MultiSafepayController(http.Controller):
         if order_response.get('success', False):
             payment_url = order_response.get('data').get('payment_url')
             return werkzeug.utils.redirect(payment_url)
+
+        else:
+            request.env['payment.transaction'].sudo().search([('reference', '=', post['order_reference'])],
+                                                             limit=1).unlink()
+            if order_response.get('error_code', False) == 1006:
+                order_id = order_body.get('order_id', False)
+                payment_options = order_body.get('payment_options', False)
+                redirect_url = payment_options.get('redirect_url', False)
+                if order_id and redirect_url:
+                    redirect_url = redirect_url + '&transactionid=' + order_id
+                    return werkzeug.utils.redirect(redirect_url)
 
         return Response('MultiSafepay error message: ' + order_response.get('error_info', 'unknown'), status=400)

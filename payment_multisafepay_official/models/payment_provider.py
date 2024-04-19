@@ -1,7 +1,6 @@
 from odoo import models, fields, api, http
 from odoo.exceptions import UserError
 from multisafepay.client import Client
-import time
 from .payment_icon import DEFAULT_VALUES, E_INVOICING_PAYMENT_METHOD
 from .payment_icon import MultiSafepayPaymentIcon
 import logging
@@ -10,9 +9,12 @@ _logger = logging.getLogger(__name__)
 
 
 class MultiSafepayPaymentAcquirer(models.Model):
-    _inherit = 'payment.acquirer'
+    _inherit = 'payment.provider'
 
-    provider = fields.Selection(selection_add=[('multisafepay', 'MultiSafepay')])
+    code = fields.Selection(
+        selection_add=[("multisafepay", "MultiSafepay")],
+        ondelete={"multisafepay": "set default"},
+    )
     multisafepay_api_key_test = fields.Char('MultiSafepay test api key', size=40)
     multisafepay_api_key_live = fields.Char('MultiSafepay live api key', size=40)
 
@@ -41,13 +43,11 @@ class MultiSafepayPaymentAcquirer(models.Model):
                 continue
             if icon.currency_ids and currency not in icon.currency_ids:
                 continue
-            if icon.country_ids and partner.country_id not in icon.country_ids:
-                continue
             payment_method_list.append(icon)
         return payment_method_list
 
     def pull_merchant_payment_methods(self):
-        if self.state == 'disabled' or self.provider != 'multisafepay':
+        if self.state == 'disabled' or self.code != 'multisafepay':
             pass
 
         multisafepay_client = self.get_multisafepay_client()
@@ -79,22 +79,21 @@ class MultiSafepayPaymentAcquirer(models.Model):
             payment_icon = MultiSafepayPaymentIcon.create_multisafepay_icon(
                 payment_method.get('id', ''),
                 self.env,
-                self.provider
+                self.code
             )
             payment_icon_ids.append(payment_icon.id)
 
         existing_generic_icon = self.env['payment.icon'].search(
-                        [('is_generic_gateway', '=', payment_method.get('id', '').upper())],
-                        limit=1)
+            [('is_generic_gateway', '=', payment_method.get('id', '').upper())], limit=1)
 
         if existing_generic_icon:
             payment_icon_ids.append(existing_generic_icon.id)
         else:
             generic_payment_icon = MultiSafepayPaymentIcon.create_multisafepay_icon(
-                                    'GENERIC',
-                                    self.env,
-                                    self.provider
-                                )
+                'GENERIC',
+                self.env,
+                self.code
+            )
             payment_icon_ids.append(generic_payment_icon.id)
 
         self.write({'payment_icon_ids': payment_icon_ids})
@@ -122,47 +121,6 @@ class MultiSafepayPaymentAcquirer(models.Model):
             return 'TEST'
         return 'LIVE'
 
-    def multisafepay_get_form_action_url(self):
-        self.ensure_one()
-        return '/payment/multisafepay/init'
-
-    def render(self, reference, amount, currency_id, partner_id=False, values=None):
-        partner_id = values.get('partner_id', partner_id)
-        billing_partner_id = values.get('billing_partner_id', partner_id)
-        if partner_id:
-            partner = self.env['res.partner'].browse(partner_id)
-            if partner_id != billing_partner_id:
-                billing_partner = self.env['res.partner'].browse(billing_partner_id)
-            else:
-                billing_partner = partner
-            values.update({
-                'billing_partner_street': billing_partner.street,
-                'billing_partner_street2': billing_partner.street2,
-            })
-        return super(MultiSafepayPaymentAcquirer, self).render(reference, amount, currency_id, partner_id, values)
-
-    def multisafepay_form_generate_values(self, values):
-        return {
-            'order_reference': values.get('reference'),
-            'currency': values.get('currency').name,
-            'amount': int(float(values.get('amount')) * 100),
-            'lang': values.get('billing_partner_lang'),
-            'first_name': values.get('billing_partner_first_name'),
-            'last_name': values.get('billing_partner_last_name'),
-            'address': values.get('billing_partner_street'),
-            'address2': values.get('billing_partner_street2'),
-            'zip_code': values.get('billing_partner_zip'),
-            'city': values.get('billing_partner_city'),
-            'country': values.get('billing_partner_country') and values.get('billing_partner_country').code or '',
-            'phone': values.get('billing_partner_phone'),
-            'email': values.get('billing_partner_email'),
-            'acquirer': values.get('acquirer', False),
-            'payment_method': values.get('payment_method', False),
-            'website': values.get('website', False),
-            'issuer_id': values.get('issuer', False),
-            'base_url': self.get_base_url(),
-        }
-
     def get_ideal_issuers(self):
         multisafepay_client = self.get_multisafepay_client()
         ideal_issuers = multisafepay_client.ideal_issuers.get()
@@ -176,14 +134,16 @@ class MultiSafepayPaymentAcquirer(models.Model):
         gateway = self.get_gateway(payment_method_id=data['payment_method'])
         website = self.env['website'].search([('id', '=', data['website'])], limit=1)
         sale_order = self.env['sale.order'].sudo().browse(data['sale_order_id'])
-
         currency = self.__check_currency(gateway=gateway, current_currency=data['currency'])
         shopping_cart = self.__get_shopping_cart_with_checkout_options(sale_order, gateway, data['currency'])
         amount = self.__check_amount(gateway=gateway, current_amount=data['amount'], shopping_cart=shopping_cart)
 
         order_body = {
             'type': self.__get_order_type(gateway=gateway),
-            'order_id': data['order_reference'] + '_' + str(int(time.time())),
+            'order_id': data['order_reference'].split('-')[0],
+            'custom_info': {
+                'transaction_reference': data['order_reference']
+            },
             'currency': currency,
             'amount': round(amount) if isinstance(amount, (int, float)) else amount,
             'gateway': gateway,
@@ -199,9 +159,9 @@ class MultiSafepayPaymentAcquirer(models.Model):
                 'email': data['email'],
             },
             'payment_options': {
-                'notification_url': data['base_url'] + 'payment/multisafepay/notification?type=notification',
-                'redirect_url': data['base_url'] + 'payment/multisafepay/notification?type=redirect',
-                'cancel_url': data['base_url'] + 'payment/multisafepay/notification?type=cancel',
+                'notification_url': data['base_url'] + '/payment/multisafepay/notification?type=notification',
+                'redirect_url': data['base_url'] + '/payment/multisafepay/notification?type=redirect',
+                'cancel_url': data['base_url'] + '/payment/multisafepay/notification?type=cancel',
                 'close_window': True
             },
             'customer': {
@@ -260,7 +220,7 @@ class MultiSafepayPaymentAcquirer(models.Model):
 
         eur = self.env.ref('base.EUR')
         initial_currency = self.env.ref('base.' + current_currency.upper())
-        return initial_currency._convert(float(current_price), eur, self.company_id, fields.Date.today())
+        return initial_currency._convert(float(current_price), eur, self.company_id, fields.Date.today(), round=False)
 
     @staticmethod
     def __get_order_type(gateway):
@@ -271,13 +231,13 @@ class MultiSafepayPaymentAcquirer(models.Model):
         return 'redirect'
 
     @staticmethod
-    def __get_tax_percentage(order_line):
+    def __get_tax_percentage(order_line, price_unit):
         tax_percentage = 0
         if not order_line:
             return tax_percentage
 
-        if order_line.price_tax != 0 and order_line.price_unit != 0:
-            tax_percentage = order_line.price_tax / order_line.price_unit
+        if order_line.price_tax != 0 and price_unit != 0:
+            tax_percentage = order_line.price_tax / (price_unit * order_line.product_uom_qty)
         return round(tax_percentage, 2)
 
     def __get_shopping_cart_with_checkout_options(self, sale_order, gateway, current_currency):
@@ -296,12 +256,13 @@ class MultiSafepayPaymentAcquirer(models.Model):
             }
         ]
         for order_line in sale_order.order_line:
-            tax_percentage = MultiSafepayPaymentAcquirer.__get_tax_percentage(order_line)
-            tax_table_selector_name = 'TAX' + str(int(tax_percentage * 100)) if tax_percentage != 0 else 'none'
+            price_unit = order_line.price_total / order_line.product_uom_qty
+            # tax_percentage = MultiSafepayPaymentAcquirer.__get_tax_percentage(order_line, price_unit)
+            # tax_table_selector_name = 'TAX' + str(int(tax_percentage * 100)) if tax_percentage != 0 else 'none'
             price_unit = self.__check_unit_price(
                 gateway=gateway,
                 current_currency=current_currency,
-                current_price=order_line.price_unit
+                current_price=price_unit
             )
 
             items.append({
@@ -310,23 +271,23 @@ class MultiSafepayPaymentAcquirer(models.Model):
                 'unit_price': price_unit,
                 'quantity': order_line.product_uom_qty,
                 'merchant_item_id': order_line.product_id.id,
-                'tax_table_selector': tax_table_selector_name,
+                # 'tax_table_selector': tax_table_selector_name,
                 'weight': {
                     'unit': order_line.product_id.weight_uom_name.upper(),
                     'value': order_line.product_id.weight,
                 }
             })
 
-            tax_found = any(alternate_item.get('name') == tax_table_selector_name for alternate_item in alternate)
-            if not tax_found:
-                alternate.append({
-                    'name': tax_table_selector_name,
-                    'rules': [
-                        {
-                            'rate': tax_percentage,
-                        },
-                    ],
-                })
+            # tax_found = any(alternate_item.get('name') == tax_table_selector_name for alternate_item in alternate)
+            # if not tax_found:
+            #     alternate.append({
+            #         'name': tax_table_selector_name,
+            #         'rules': [
+            #             {
+            #                 'rate': tax_percentage,
+            #             },
+            #         ],
+            #     })
 
         return {
             'shopping_cart': {

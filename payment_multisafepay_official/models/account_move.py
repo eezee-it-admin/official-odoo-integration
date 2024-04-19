@@ -24,7 +24,7 @@ class MultiSafepayAccountMove(models.Model):
             if not multisafepay_tx_ids:
                 continue
 
-            multisafepay_client = multisafepay_tx_ids[0].acquirer_id.get_multisafepay_client()
+            multisafepay_client = multisafepay_tx_ids[0].provider_id.get_multisafepay_client()
             for multisafepay_tx_id in multisafepay_tx_ids:
                 order = multisafepay_client.order.get(multisafepay_tx_id.multisafepay_order_id)
 
@@ -45,7 +45,7 @@ class MultiSafepayAccountMove(models.Model):
         if not multisafepay_tx_ids:
             return
 
-        multisafepay_client = multisafepay_tx_ids[0].acquirer_id.get_multisafepay_client()
+        multisafepay_client = multisafepay_tx_ids[0].provider_id.get_multisafepay_client()
         order = multisafepay_client.order.get(multisafepay_tx_ids[0].multisafepay_order_id)
         _logger.info(pprint.pformat(order))
 
@@ -56,15 +56,11 @@ class MultiSafepayAccountMove(models.Model):
             return
 
         gateway = order.get('data', {}).get('payment_details', {}).get('type', '')
-        gateway_object = MultiSafepayPaymentIcon.create_multisafepay_icon(
-                        gateway,
-                        self.env,
-                        self.provider
-                    )
+
         refund_with_shopping_cart = gateway in ['KLARNA',
                                                 'AFTERPAY',
                                                 'PAYAFTER',
-                                                'EINVOICE', ] or gateway_object.requires_shopping_cart
+                                                'EINVOICE', ]
         refund_body = self.__get_refund_body(refund_with_shopping_cart, order)
         _logger.info(refund_body)
         response = multisafepay_client.order.refund(multisafepay_tx_ids[0].multisafepay_order_id, refund_body)
@@ -75,7 +71,7 @@ class MultiSafepayAccountMove(models.Model):
                             response.get('error_info', 'unknown'))
         self.multisafepay_refund_id = response.get('data').get('refund_id')
         self.create_refund_payment()
-        self.invoice_payment_state = 'in_payment'
+        self.payment_state = 'in_payment'
         self.message_post(body='Refund was requested with MultiSafepay')
 
         if refund_with_shopping_cart:
@@ -93,18 +89,18 @@ class MultiSafepayAccountMove(models.Model):
     def __can_be_refund(self):
         self.ensure_one()
 
-        if self.type != 'out_refund':
+        if self.move_type != 'out_refund':
             return False
         if self.state != 'posted':
             return False
-        if self.invoice_payment_state == 'paid' or self.invoice_payment_state == 'in_payment':
+        if self.payment_state == 'paid' or self.payment_state == 'in_payment':
             return False
         return True
 
     @staticmethod
     def __multisafepay_tx_can_be_refund(order):
-        return order.get('data').get('status') in ['completed', 'shipped'] \
-               and order.get('data').get('amount_refunded') < order.get('data').get('amount')
+        return order.get('data').get('status') in ['completed', 'shipped', 'partial_refunded'] \
+            and order.get('data').get('amount_refunded') < order.get('data').get('amount')
 
     def __get_multisafepay_tx_ids(self):
         self.ensure_one()
@@ -113,35 +109,30 @@ class MultiSafepayAccountMove(models.Model):
         if not tx_ids:
             tx_ids = self.env['payment.transaction'].sudo().search(
                 [('invoice_ids', 'in', self.reversed_entry_id.id)])
-        return list(filter(lambda tx: tx.provider == 'multisafepay', tx_ids))
+        return list(filter(lambda tx: tx.provider_code == 'multisafepay', tx_ids))
 
     def set_refund_paid(self):
         self.ensure_one()
-        if self.invoice_payment_state != 'in_payment':
+        if self.payment_state != 'in_payment':
             return
         payment = self.env['account.payment'].sudo().browse(int(self.payment_refund_id))
         context = self.env.context.copy()
         context.update({'mail_create_nosubscribe': True})
         payment.with_context(context).post()
-        self.invoice_payment_state = 'paid'
+        self.payment_state = 'paid'
         self.message_post(body='Refund was paid with MultiSafepay')
 
     def create_refund_payment(self):
         self.ensure_one()
-        payment = self.env['account.payment'].sudo().create({
-            'amount': self.amount_total,
-            'payment_date': fields.Date.today(),
-            'payment_type': 'outbound',
-            'payment_method_id': 2,
-            'journal_id': self.journal_id.id,
-            'currency_id': self.currency_id.id,
-            'partner_id': self.partner_id.id,
-            'partner_type': 'customer',
-            'company_id': self.company_id.id,
-            'communication': self.invoice_payment_ref,
+        multisafepay_provider = self.env.ref('payment_multisafepay_official.payment_acquirer_multisafepay')
+        if multisafepay_provider:
+            journal_id = multisafepay_provider[0].journal_id
+        account_payment_register = self.env['account.payment.register'].with_context(active_ids=self.ids,
+                                                                                     active_model='account.move')
+        payment_obj = account_payment_register.create({
+            'journal_id': journal_id.id,
         })
-        payment.invoice_ids = [self.id]
-        self.payment_refund_id = payment.id
+        payment_obj.action_create_payments()
 
     def __get_refund_body(self, refund_with_shopping_cart, original_order):
         order_currency = original_order.get('data').get('currency', self.currency_id.name)
@@ -152,7 +143,7 @@ class MultiSafepayAccountMove(models.Model):
             reason = 'Refund Description'
 
         if not refund_with_shopping_cart:
-            amount = self.amount_total * 100
+            amount = round(self.amount_total * 100)
             if order_currency != self.currency_id.name:
                 amount = round(self.currency_id._convert(
                     amount,

@@ -13,7 +13,7 @@
                         type="object"
                         attrs="{'invisible' : [('can_be_refund_with_multisafepay', '=', False)]}"/>
             </header>
-            <xpath expr='//field[@name="currency_id"]' position='after'>
+            <xpath expr='//group[@id="header_right_group"]' position='inside'>
                 <field name="multisafepay_refund_id" readonly="1"/>
             </xpath>
         </field>

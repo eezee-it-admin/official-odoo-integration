@@ -2,12 +2,11 @@
 <odoo>
     <data noupdate="1">
         <record id="payment_icon_multisafepay" model="payment.icon">
-            <field name="name">MultiSafepay</field>
+            <field name="sequence">10</field>
             <field name="title">MultiSafepay</field>
-            <field name="provider">multisafepay</field>
+            <field name="name">MultiSafepay</field>
             <field name="image" type="base64"
                    file="payment_multisafepay_official/static/src/img/payment_methods/MultiSafepay.png"/>
-            <field name="acquirer_ids" eval="[(6, 0, [ref('payment_acquirer_multisafepay')])]"/>
         </record>
     </data>
 </odoo>
