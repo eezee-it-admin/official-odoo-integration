@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ***
 
+## 1.1.1
+Release date: Mar 15th, 2022
+
+### Fixed
++ ODOO-12: Fix error when payment method list needs to be rendered, and a payment link is being used 
+
+***
+
 ## 1.1.0
 Release date: Jul 2nd, 2021
 
