@@ -19,7 +19,7 @@
     # Check https://github.com/odoo/odoo/blob/13.0/odoo/addons/base/data/ir_module_category_data.xml
     # for the full list
     'category': 'eCommerce',
-    'version': '1.1.1',
+    'version': '16.0.1.1.4',
 
     # any module necessary for this one to work correctly
     'depends': ['payment', 'sale', 'delivery'],
@@ -31,16 +31,24 @@
         'views/payment_views.xml',
         'views/payment_templates.xml',
         'views/account_move_views.xml',
-
-        'data/payment_acquirer.xml',
+        'data/payment_provider.xml',
         'data/payment_icon.xml',
+        'data/payment_method.xml',
+        'data/ir_cron.xml',
     ],
     # only loaded in demonstration mode
     'demo': [
         'demo/demo.xml',
     ],
+    'assets': {
+        'web.assets_frontend': [
+            'payment_multisafepay_official/static/src/js/payment_multisafepay.js',
+        ]
+    },
     'images': ['static/description/main.png'],
     'installable': True,
+    'post_init_hook': 'post_init_hook',
+    'uninstall_hook': 'uninstall_hook',
     'application': True,
     'auto_install': False,
 }
