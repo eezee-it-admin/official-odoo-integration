@@ -1,5 +1,3 @@
-from werkzeug import urls
-
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError
 import logging
@@ -74,8 +72,14 @@ class MultiSafepayPaymentTransaction(models.Model):
             _logger.info(error_msg)
             raise ValidationError(error_msg)
 
-        txs = self.search(['|', ('reference', '=', multisafepay_order_id),
-                           ('reference', '=like', multisafepay_order_id + '-%')], order="id desc", limit=1)
+        # To treat old datas with order ID like 'SO00001-1_123456789'
+        if '_' in multisafepay_order_id:
+            reference = multisafepay_order_id.split('_')[0]
+            txs = self.search([("reference", "=", reference)])
+        else:
+            txs = self.search(['|', ('reference', '=', multisafepay_order_id),
+                               ('reference', '=like', multisafepay_order_id + '-%')], order="id desc", limit=1)
+
         if not txs or len(txs) > 1:
             error_msg = "MultiSafepay: received data for reference %s" % (multisafepay_order_id)
             if not txs:

@@ -2,15 +2,15 @@
   <img src="https://www.multisafepay.com/img/multisafepaylogo.svg" width="400px" position="center">
 </p>
 
-# MultiSafepay plugin Odoo 13 eCommerce 
+# MultiSafepay plugin Odoo 16 eCommerce 
 
-Easily integrate MultiSafepay payment solutions into your Odoo 13 eCommerce webshop with the free and completely new MultiSafepay Odoo 13 eCommerce plugin.
+Easily integrate MultiSafepay payment solutions into your Odoo 16 eCommerce webshop with the free and completely new MultiSafepay Odoo 16 eCommerce plugin.
 
 ## About MultiSafepay ##
 MultiSafepay is a collecting payment service provider which means we take care of the agreements, technical details and payment collection required for each payment method. You can start selling online today and manage all your transactions from one place.
 
 
-## What is Odoo 13 eCommerce?
+## What is Odoo 16 eCommerce?
 Odoo is an open source software founded in 2004 by a student. Firstly known as OpenERP, the brand changed its focus from an ERP solution to a suite of business applications. More than 360 apps are available thanks to the multiple developments made by Odoo S.A. and its community. Some of these apps are officially validated by Odoo, whereas others developed by the community are dedicated to specific versions for specific needs.
 
 Odoo is available in three editions: Community, Enterprise, and Online. The Community edition can be downloaded free of charge via the Odoo website. The Enterprise edition offers more features but comes with a yearly cost. The Online offer is the equivalent of the Enterprise version but hosted in the cloud and monthly billed. For this comparison, we choose to compare the Enterprise edition.
@@ -19,7 +19,7 @@ Odoo is available in three editions: Community, Enterprise, and Online. The Comm
 ##  Requirements
 1.  in order to use the plugin you need a MultiSafepay account. 
 You can create a test account on [MultiSafepay Control](https://testmerchant.multisafepay.com/signup)
-2.  Odoo 13.0
+2.  Odoo 16.0
 3.  Tested on Python 3.6
 
 ##  Installation
@@ -32,7 +32,7 @@ You can create a test account on [MultiSafepay Control](https://testmerchant.mul
     ```
     Alternatively, you can install them manually by doing
     ```shell
-    pip3 install multisafepay==0.2.0
+    pip3 install multisafepay==0.3.0
     ```
     You can find all the information about the dependencies at this [link](https://pypi.org/project/multisafepay/)
 4.  Restart Odoo server
@@ -133,7 +133,7 @@ Have you seen an opportunity to change things for better? We invite you to creat
 Are you missing something and would like us to fix it? Suggest an improvement by sending us an [email](mailto:integration@multisafepay.com) or by creating an issue.
 
 ## Testing
-Would you like to try out a working version of a Odoo 13 webshop? Reach out to our Integration team at <integration@multisafepay.com> and one of our colleagues will assist you in opening a test account, where you can install the MultiSafepay's latest Odoo 13 plugin and its current functionality.
+Would you like to try out a working version of a Odoo 16 webshop? Reach out to our Integration team at <integration@multisafepay.com> and one of our colleagues will assist you in opening a test account, where you can install the MultiSafepay's latest Odoo 16 plugin and its current functionality.
 
 ## License
 [MIT License](https://github.com/MultiSafepay/odoo/blob/develop/LICENSE)

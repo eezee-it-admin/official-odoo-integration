@@ -36,8 +36,10 @@ class MultiSafepayController(http.Controller):
 
         post['ip_address'] = request.httprequest.environ.get('REMOTE_ADDR')
         post['user_agent'] = request.httprequest.environ.get('HTTP_USER_AGENT', '')
-        post['sale_order_id'] = request.session.get('sale_last_order_id')
-
+        last_order_id = request.session.get('sale_last_order_id')
+        post['sale_order_id'] = last_order_id
+        if not last_order_id:
+            return request.redirect('/shop')
         order_body = acquirer.build_order_body(post)
         _logger.info(json.dumps(order_body))
         order_response = multisafepay_client.order.create(order_body)
